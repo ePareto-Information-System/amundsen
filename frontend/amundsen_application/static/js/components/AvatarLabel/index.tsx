@@ -26,7 +26,7 @@ const AvatarLabel: React.FC<AvatarLabelProps> = ({
       className={avatarClass}
       name={label}
       src={src}
-      size={24}
+      size={34}
       round={round}
     />
     <span className={`avatar-label text-body-w2 ${labelClass}`}>{label}</span>

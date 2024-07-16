@@ -1,83 +1,111 @@
-version: '3'
+version: "3"
 services:
   neo4j:
-      image: neo4j:3.5.26
-      container_name: neo4j_amundsen
-      environment:
-        - NEO4J_AUTH=neo4j/test
-      ulimits:
-        nofile:
-          soft: 40000
-          hard: 40000
-      ports:
-          - 7474:7474
-          - 7687:7687
-      volumes:
-          - ./example/docker/neo4j/conf:/var/lib/neo4j/conf
-          - ./example/docker/neo4j/plugins:/var/lib/neo4j/plugins
-          - ./example/backup:/backup
-          - neo4j_data:/data
-      networks:
-        - amundsennet
+    image: neo4j:3.5.26
+    container_name: neo4j_amundsen
+    environment:
+      - NEO4J_AUTH=neo4j/test
+    ulimits:
+      nofile:
+        soft: 40000
+        hard: 40000
+    ports:
+      - 7474:7474
+      - 7687:7687
+    volumes:
+      - ./example/docker/neo4j/conf:/var/lib/neo4j/conf
+      - ./example/docker/neo4j/plugins:/var/lib/neo4j/plugins
+      - ./example/backup:/backup
+      - neo4j_data:/data
+    networks:
+      - amundsennet
+    restart: always
+
   elasticsearch:
-      image: elasticsearch:8.0.0
-      container_name: es_amundsen
-      ports:
-          - 9200:9200
-      volumes:
-        - es_data:/usr/share/elasticsearch/data
-      networks:
-        - amundsennet
-      ulimits:
-        nofile:
-          soft: 65536
-          hard: 65536
-      environment:
-        - discovery.type=single-node
-        - xpack.security.enabled=false
+    image: elasticsearch:8.0.0
+    container_name: es_amundsen
+    ports:
+      - 9200:9200
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - amundsennet
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    restart: always
+
   amundsensearch:
-      image: amundsendev/amundsen-search:4.0.2
-      container_name: amundsensearch
-      ports:
-        - 5001:5000
-      depends_on:
-        - elasticsearch
-      networks:
-        - amundsennet
-      environment:
-        - PROXY_ENDPOINT=es_amundsen
-      command: gunicorn -w 2 --bind :5000 search_service.search_wsgi
+    image: amundsendev/amundsen-search:4.0.2
+    container_name: amundsensearch
+    ports:
+      - 5001:5000
+    depends_on:
+      - elasticsearch
+    networks:
+      - amundsennet
+    environment:
+      - PROXY_ENDPOINT=es_amundsen
+    command: gunicorn -w 2 --bind :5000 search_service.search_wsgi
+    restart: always
+
   amundsenmetadata:
-      image: amundsendev/amundsen-metadata:3.11.0
-      container_name: amundsenmetadata
-      depends_on:
-        - neo4j
-      ports:
-        - 5002:5000
-      networks:
-        - amundsennet
-      environment:
-         - PROXY_HOST=bolt://neo4j_amundsen
-      command: gunicorn -w 2 --bind :5000 metadata_service.metadata_wsgi
+    build:
+      context: .
+      dockerfile: Dockerfile.metadata.public
+    image: amundsenmetadata
+    container_name: amundsenmetadata
+    depends_on:
+      - neo4j
+    ports:
+      - 5002:5000
+    networks:
+      - amundsennet
+    environment:
+      - PROXY_HOST=bolt://neo4j_amundsen
+      - FLASK_APP_MODULE_NAME=flaskoidc
+      - FLASK_APP_CLASS_NAME=FlaskOIDC
+      - FLASK_OIDC_WHITELISTED_ENDPOINTS=api.healthcheck
+    restart: always
+
   amundsenfrontend:
-      image: amundsendev/amundsen-frontend:4.2.0
-      container_name: amundsenfrontend
-      depends_on:
-        - amundsenmetadata
-        - amundsensearch
-      ports:
-        - 5000:5000
-      networks:
-        - amundsennet
-      environment:
-        - SEARCHSERVICE_BASE=http://amundsensearch:5000
-        - METADATASERVICE_BASE=http://amundsenmetadata:5000
-        # Only for easy config-less Quickstart bookmark evalutation. `TestConfig` extends ordinary `LocalConfig` by
-        # defining `AUTH_USER_METHOD` to a hardcoded dummy user in `amundsen_application.tests.test_utils.get_test_user()`
-        # See further docs in https://github.com/amundsen-io/amundsenfrontendlibrary/blob/master/docs/configuration.md#flask
-        # and https://github.com/amundsen-io/amundsenfrontendlibrary/blob/master/docs/configuration.md#authentication
-        - FRONTEND_SVC_CONFIG_MODULE_CLASS=amundsen_application.config.TestConfig
-      command: gunicorn -w 2 --bind :5000 amundsen_application.wsgi
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend.public
+      args:
+        METADATASERVICE_BASE: http://amundsenmetadata:5000
+        SEARCHSERVICE_BASE: http://amundsensearch:5000
+    container_name: amundsenfrontend
+    image: amundsenfrontend
+    depends_on:
+      - amundsenmetadata
+      - amundsensearch
+    ports:
+      - 5000:5000
+    networks:
+      - amundsennet
+    environment:
+      - SEARCHSERVICE_BASE=http://amundsensearch:5000
+      - METADATASERVICE_BASE=http://amundsenmetadata:5000
+      # Only for easy config-less Quickstart bookmark evalutation. `TestConfig` extends ordinary `LocalConfig` by
+      # defining `AUTH_USER_METHOD` to a hardcoded dummy user in `amundsen_application.tests.test_utils.get_test_user()`
+      # See further docs in https://github.com/amundsen-io/amundsenfrontendlibrary/blob/master/docs/configuration.md#flask
+      # and https://github.com/amundsen-io/amundsenfrontendlibrary/blob/master/docs/configuration.md#authentication
+      - FLASK_APP_MODULE_NAME=flaskoidc
+      - FLASK_APP_CLASS_NAME=FlaskOIDC
+      - FRONTEND_SVC_CONFIG_MODULE_CLASS=amundsen_application.oidc_config.OidcConfig
+      - APP_WRAPPER=flaskoidc
+      - APP_WRAPPER_CLASS=FlaskOIDC
+      - SQLALCHEMY_DATABASE_URI=sqlite:///sessions.db
+      - SESSION_TYPE=sqlalchemy
+      - FLASK_OIDC_LOG_DATE_FORMAT=%Y-%m-%dT%H:%M:%S%z
+      - FLASK_OIDC_LOG_LEVEL=DEBUG
+      - OIDC_CLOCK_SKEW=560
+    restart: always
 
 networks:
   amundsennet:

@@ -22,17 +22,74 @@ CMD [ "python3",  "amundsen_application/wsgi.py" ]
 
 FROM base as oidc-release
 
-RUN pip3 install -e .[oidc]
+COPY ./frontend/client_secrets_keycloak.json client_secrets_keycloak.json
+
+
+RUN pip3 install -e .[oidc] && \
+    pip3 install flaskoidc
 ENV FRONTEND_SVC_CONFIG_MODULE_CLASS amundsen_application.oidc_config.OidcConfig
+
+ENV FLASK_APP_MODULE_NAME flaskoidc
+ENV FLASK_APP_CLASS_NAME FlaskOIDC
+
 ENV APP_WRAPPER flaskoidc
 ENV APP_WRAPPER_CLASS FlaskOIDC
 ENV FLASK_OIDC_WHITELISTED_ENDPOINTS status,healthcheck,health
+
+ENV SESSION_TYPE sqlalchemy
+
 ENV SQLALCHEMY_DATABASE_URI sqlite:///sessions.db
 
+
+ENV FLASK_OIDC_SECRET_KEY 'pva8bw99IUhqPGffSJxvNKLviEA0XESm'
+ENV FLASK_OIDC_CONFIG_URL 'http://10.100.2.48:8090/realms/minio_realm/.well-known/openid-configuration'
+ENV FLASK_OIDC_PROVIDER_NAME 'keycloak'
+ENV FLASK_OIDC_CLIENT_ID 'amundsen'
+ENV FLASK_OIDC_CLIENT_SECRET 'pva8bw99IUhqPGffSJxvNKLviEA0XESm'
+
+ENV FLASK_OIDC_LOG_DATE_FORMAT '%Y-%m-%dT%H:%M:%S%z'
+ENV FLASK_OIDC_LOG_LEVEL 'INFO'
+
+ENV OIDC_CLIENT_SECRETS 'client_secrets_keycloak.json'
+
+CMD [ "python3",  "amundsen_application/wsgi.py" ]
 # You will need to set these environment variables in order to use the oidc image
 # FLASK_OIDC_CONFIG_URL - url endpoint for your oidc provider config
 # FLASK_OIDC_PROVIDER_NAME - oidc provider name
 # FLASK_OIDC_CLIENT_ID - oidc client id
 # FLASK_OIDC_CLIENT_SECRET - oidc client secret
 
-FROM base as release
+# FROM base as release
+
+# COPY /app/client_secrets_keycloak.json client_secrets_keycloak.json
+
+
+# RUN pip3 install -e .[oidc] && \
+#     pip3 install flaskoidc
+# ENV FRONTEND_SVC_CONFIG_MODULE_CLASS amundsen_application.oidc_config.OidcConfig
+
+# ENV FLASK_APP_MODULE_NAME flaskoidc
+# ENV FLASK_APP_CLASS_NAME FlaskOIDC
+
+# ENV APP_WRAPPER flaskoidc
+# ENV APP_WRAPPER_CLASS FlaskOIDC
+# ENV FLASK_OIDC_WHITELISTED_ENDPOINTS status,healthcheck,health
+
+# ENV SESSION_TYPE sqlalchemy
+
+# ENV SQLALCHEMY_DATABASE_URI sqlite:///sessions.db
+
+
+# ENV FLASK_OIDC_SECRET_KEY 'pva8bw99IUhqPGffSJxvNKLviEA0XESm'
+# ENV FLASK_OIDC_CONFIG_URL 'http://10.100.2.48:8090/realms/minio_realm/.well-known/openid-configuration'
+# ENV FLASK_OIDC_PROVIDER_NAME 'keycloak'
+# ENV FLASK_OIDC_CLIENT_ID 'amundsen'
+# ENV FLASK_OIDC_CLIENT_SECRET 'pva8bw99IUhqPGffSJxvNKLviEA0XESm'
+
+# ENV FLASK_OIDC_LOG_DATE_FORMAT '%Y-%m-%dT%H:%M:%S%z'
+# ENV FLASK_OIDC_LOG_LEVEL 'INFO'
+
+# ENV OIDC_CLIENT_SECRETS 'client_secrets_keycloak.json'
+
+
+# CMD [ "python3",  "amundsen_application/wsgi.py" ]

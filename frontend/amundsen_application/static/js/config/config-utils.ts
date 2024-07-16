@@ -472,7 +472,7 @@ export function getDocumentTitle(): string {
  * Returns logoTitle.
  */
 export function getLogoTitle(): string {
-  return AppConfig.logoTitle;
+  return 'Health Sector Data Dictionary';
 }
 
 /**

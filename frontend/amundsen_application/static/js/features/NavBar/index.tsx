@@ -42,10 +42,10 @@ const PROFILE_LINK_TEXT = 'My Profile';
 const PRODUCT_TOUR_BUTTON_TEXT = 'Discover Amundsen';
 const APP_SUITE_BUTTON_TEXT = 'Related Apps';
 export const HOMEPAGE_PATH = '/';
-const AVATAR_SIZE = 32;
+const AVATAR_SIZE = 45;
 
-const GENERIC_LIGHT_LOGO_PATH = '/static/images/icons/amundsen-logo-light.svg';
-const GENERIC_DARK_LOGO_PATH = '/static/images/icons/amundsen-logo-dark.svg';
+const GENERIC_LIGHT_LOGO_PATH = '/static/images/icons/moh-logo.png';
+const GENERIC_DARK_LOGO_PATH = '/static/images/icons/moh-logo.png';
 const TRACKING_MESSAGES = {
   START_TOUR: 'Start Tour',
   END_TOUR: 'End Tour',
@@ -260,7 +260,9 @@ export const ProfileMenu: React.FC<ProfileMenuProps> = ({ loggedInUser }) => {
   let avatar = <div className="nav-shimmering-circle is-shimmer-animated" />;
 
   if (display_name) {
-    avatar = <Avatar name={display_name} size={AVATAR_SIZE} round />;
+    avatar = (
+      <Avatar name="Health Sector Data Dictionary" size={AVATAR_SIZE} round />
+    );
   }
 
   if (!indexUsersEnabled()) {
