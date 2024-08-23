@@ -1,7 +1,7 @@
-Get lineage
+Get Custom Table lineage
 ---
 tags:
-  - "lineage"
+  - "custom_table_lineage"
 parameters:
   - name: id
     in: path

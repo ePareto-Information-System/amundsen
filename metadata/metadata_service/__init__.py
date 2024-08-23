@@ -7,7 +7,7 @@ import logging
 import logging.config
 import os
 import sys
-from typing import Any, Dict  # noqa: F401
+from typing import Any, Dict 
 
 from flasgger import Swagger
 from flask import Blueprint, Flask
@@ -44,6 +44,8 @@ from metadata_service.api.user import (UserDetailAPI, UserFollowAPI,
                                        UserFollowsAPI, UserOwnAPI, UserOwnsAPI,
                                        UserReadsAPI)
 from metadata_service.deprecations import process_deprecations
+
+from metadata_service.api.custom_lineage import (CustomColumnLineageAPI,CustomTableLineageAPI)
 
 # For customized flask use below arguments to override.
 FLASK_APP_MODULE_NAME = os.getenv('FLASK_APP_MODULE_NAME')
@@ -186,6 +188,11 @@ def create_app(*, config_module_class: str) -> Flask:
                      '/feature/<path:id>/sample_data')
     api.add_resource(FeatureGenerationCodeAPI,
                      '/feature/<path:feature_uri>/generation_code')
+    api.add_resource(CustomTableLineageAPI,
+                     '/custom_lineage/table/lineage')
+    api.add_resource(CustomColumnLineageAPI,
+                     '/custom_lineage/table/<path:table_uri>/column/<column_name>/lineage')
+   
     app.register_blueprint(api_bp)
 
     # cli registration

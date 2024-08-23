@@ -53,3 +53,7 @@ coverage
 # Helm
 amundsen-kube-helm/templates/helm/charts/*
 amundsen-kube-helm/templates/helm/requirements.lock
+.history/*
+venv/*
+databuilder/databuildervenv/*
+metadata/.history/*

@@ -1,15 +1,22 @@
-Get lineage
+Get Custom Column lineage
 ---
 tags:
-  - "lineage"
+  - "custom_column_lineage"
 parameters:
-  - name: id
+  - name: table_uri
     in: path
     type: string
     schema:
       type: string
     required: true
     example: "hive://gold.test_schema/test_table1"
+  - name: column_name
+    in: path
+    type: string
+    schema:
+      type: string
+    required: true
+    example: "test_col_name"
   - name: direction
     in: query
     type: string
@@ -26,7 +33,7 @@ parameters:
     example: 0
 responses:
   200:
-    description: "Lineage for requested direction and depth"
+    description: "Custom Lineage for requested direction and depth"
     content:
       application/json:
         schema:
