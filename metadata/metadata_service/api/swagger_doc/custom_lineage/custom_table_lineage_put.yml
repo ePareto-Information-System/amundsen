@@ -12,19 +12,26 @@ requestBody:
           source_id:
             type: string
           target_id:
+            type: array
+            items:
+              type: string
+          lineage_type:
             type: string
         required:
           - source_id
           - target_id
+          - lineage_type
+
 responses:
-  200:
-    description: Lineage created successfully
+  201:
+    description: Table Lineage created successfully
     content:
       application/json:
         schema:
           $ref: "#/components/schemas/MessageResponse"
   400:
     description: Invalid request payload
+
     content:
       application/json:
         schema:

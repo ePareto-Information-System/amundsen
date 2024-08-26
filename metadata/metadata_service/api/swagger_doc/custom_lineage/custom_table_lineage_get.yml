@@ -2,31 +2,28 @@ Get Custom Table lineage
 ---
 tags:
   - "custom_table_lineage"
-parameters:
-  - name: id
-    in: path
-    type: string
-    schema:
-      type: string
-    required: true
-    example: "hive://gold.test_schema/test_table1"
-  - name: direction
-    in: query
-    type: string
-    schema:
-      type: string
-    required: false
-    example: "upstream"
-  - name: depth
-    in: query
-    type: integer
-    schema:
-      type: integer
-    required: false
-    example: 0
+requestBody:
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          table_id:
+            type: string
+            example: "hive://gold.test_schema/test_table1"
+
+          direction:
+            type: string
+            example: "upstream"
+          depth:
+            type: integer
+            example: 1
+        required:
+          - table_id
+
 responses:
   200:
-    description: "Lineage for requested direction and depth"
+    description: " Table Lineage for requested direction and depth"
     content:
       application/json:
         schema:

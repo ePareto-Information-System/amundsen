@@ -191,7 +191,7 @@ def create_app(*, config_module_class: str) -> Flask:
     api.add_resource(CustomTableLineageAPI,
                      '/custom_lineage/table/lineage')
     api.add_resource(CustomColumnLineageAPI,
-                     '/custom_lineage/table/<path:table_uri>/column/<column_name>/lineage')
+                     '/custom_lineage/column/lineage')
    
     app.register_blueprint(api_bp)
 

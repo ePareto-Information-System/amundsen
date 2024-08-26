@@ -1,7 +1,7 @@
-Delete Custom Column lineage
+Delete Custom Table lineage
 ---
 tags:
-  - "custom_column_lineage"
+  - "custom_table_lineage"
 requestBody:
   content:
     application/json:
@@ -22,7 +22,7 @@ requestBody:
           - target_id
 responses:
   "200":
-    description: Custom Column lineage deleted successfully
+    description: Custom Table lineage deleted successfully
   "400":
     description: Invalid request parameters
   "500":

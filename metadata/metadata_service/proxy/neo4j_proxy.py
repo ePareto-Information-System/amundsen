@@ -2242,145 +2242,129 @@ class Neo4jProxy(BaseProxy):
 
 
 
-    def create_lineage(self, source_table: str, target_tables: List[str], properties: Dict[str, Any] = None):
+
+    def delete_lineage(self, source_key: str, target_keys: List[str],  lineage_type: str, resource_type: ResourceType):
         """
-        Create a new lineage between a source table and target tables.
-        :param source_table: The name of the source table.
-        :param target_tables: A list of target table names.
+        Delete the lineage between a source and target resources (table or column).
+        :param source_key: The key of the source resource.
+        :param target_keys: A list of target resource keys.
+        :param lineage_type: The type of lineage ("upstream" or "downstream").
+        :param resource_type: The type of resource (e.g., "Table" or "Column").
+        """
+        try:
+             # Determine the relationship type and direction based on lineage_type
+            if lineage_type.lower() == "upstream":
+                relationship_type = "HAS_UPSTREAM"
+                query_direction = f"""
+                MATCH (target:{resource_type.name} {{key: target_key}})
+                MATCH (target)-[r:{relationship_type}]->(source)
+                """
+            elif lineage_type.lower() == "downstream":
+                relationship_type = "HAS_DOWNSTREAM"
+                query_direction = f"""
+                MATCH (target:{resource_type.name} {{key: target_key}})
+                MATCH (source)-[r:{relationship_type}]->(target)
+                """
+            else:
+                raise ValueError("Invalid lineage_type. Must be 'upstream' or 'downstream'.")
+
+            
+            lineage_query = textwrap.dedent(f"""
+            MATCH (source:{resource_type.name} {{key: $source_key}})
+            WITH source
+            UNWIND $target_keys as target_key
+            {query_direction}
+            DELETE r
+            RETURN count(r) as deleted_count
+            """)
+
+            params = {
+                'source_key': source_key,
+                'target_keys': target_keys
+            }
+            result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
+            deleted_count = result[0]['deleted_count'] if result else 0
+            LOGGER.info(f"Successfully deleted {deleted_count} lineage relationships from {source_key} to target keys.")
+            return f"Successfully deleted {deleted_count} lineage relationships from {source_key} to target keys."
+
+        except Exception as e:
+            print(f"Error deleting lineage from {source_key} to target tables: {e}")
+            LOGGER.error(f"Error deleting lineage from {source_key} to target tables: {e}")
+            raise e
+        
+        # create  lineage function
+
+
+    def create_lineage(self, source_key: str, target_keys: List[str], lineage_type: str, resource_type: ResourceType, properties: Dict[str, Any] = None):
+        """
+        Create a new lineage between a source and target resources (table or column).
+        :param source_key: The key of the source resource.
+        :param target_keys: A list of target resource keys.
+        :param lineage_type: The type of lineage ("upstream" or "downstream").
+        :param resource_type: The type of resource (e.g., "Table" or "Column").
         :param properties: Optional properties of the lineage.
         """
         try:
             if not properties:
                 properties = {}
 
-    # Ensure target_tables is a list
-            if isinstance(target_tables, str):
-                target_tables = [target_tables]
+        # Ensure target_keys is a list
+            if isinstance(target_keys, str):
+                target_keys = [target_keys]
 
             properties.update({
-                'source_table': source_table,
-                'target_tables': target_tables,
+                'source_key': source_key,
+                'target_keys': target_keys,
                 'timestamp': int(time.time()),
-                'key': f'{source_table}_{target_tables}_{int(time.time())}'
+                'key': f'{source_key}_{target_keys}_{int(time.time())}'
             })
 
-            lineage_query = textwrap.dedent("""
-            MERGE (source:Table {key: $source_table})
+        # Determine the relationship type and direction based on lineage_type
+            if lineage_type.lower() == "upstream":
+                relationship_type = "HAS_UPSTREAM"
+                query_direction = f"""
+                MERGE (target:{resource_type.name} {{key: target_key}})
+                MERGE (target)-[r:{relationship_type}]->(source)
+                """
+            elif lineage_type.lower() == "downstream":
+                relationship_type = "HAS_DOWNSTREAM"
+                query_direction = f"""
+                MERGE (target:{resource_type.name} {{key: target_key}})
+                MERGE (source)-[r:{relationship_type}]->(target)
+                """
+            else:
+                raise ValueError("Invalid lineage_type. Must be 'upstream' or 'downstream'.")
+
+            lineage_query = textwrap.dedent(f"""
+            MERGE (source:{resource_type.name} {{key: $source_key}})
             WITH source
-            UNWIND $target_tables as target_table
-            MERGE (target:Table {key: target_table})
-            MERGE (source)-[r:HAS_DOWNSTREAM]->(target)
+            UNWIND $target_keys as target_key
+            {query_direction}
             SET r = $props
             RETURN count(r) as created_count
             """)
-    
+
             params = {
-                'source_table': source_table,
-                'target_tables': target_tables,
-                'props': properties  # Pass the properties correctly
+                'source_key': source_key,
+                'target_keys': target_keys,
+                'props': properties
             }
+
             result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
             created_count = result[0]['created_count'] if result else 0
-            print(f"Successfully created {created_count} lineage relationships from {source_table} to target tables.")
-            LOGGER.info(f"Successfully created {created_count} lineage relationships from {source_table} to target tables.")
-        except Exception as e:
-            print(f"Error creating lineage from {source_table} to target tables: {e}")
-            LOGGER.error(f"Error creating lineage from {source_table} to target tables: {e}")
-            raise e
-
-
-
-
-    def delete_lineage(self, source_table: str, target_tables: List[str]):
-        """
-        Delete the lineage between a source table and target tables.
-        :param source_table: The name of the source table.
-        :param target_tables: A list of target table names.
-        """
-        try:
-            lineage_query = textwrap.dedent("""
-            MATCH (source:Table {key: $source_table})
-            WITH source
-            UNWIND $target_tables as target_table
-            MATCH (target:Table {key: target_table})
-            MATCH (source)-[r:HAS_DOWNSTREAM]->(target)
-            DELETE r
-            RETURN count(r) as deleted_count
-            """)
-
-            params = {
-                'source_table': source_table,
-                'target_tables': target_tables
+            LOGGER.info(f"Successfully created {created_count} lineage relationships from {source_key} to target keys.")
+            return {
+                'source_key': source_key,
+                'resource_type':resource_type.name,
+                'target_keys': target_keys,
+                'lineage_type': lineage_type,
+                'created_count': created_count,
+                'properties': properties
             }
-            result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
-            deleted_count = result[0]['deleted_count'] if result else 0
-            print(f"Successfully deleted {deleted_count} lineage relationships from {source_table} to target tables.")
-            LOGGER.info(f"Successfully deleted {deleted_count} lineage relationships from {source_table} to target tables.")
+
         except Exception as e:
-            print(f"Error deleting lineage from {source_table} to target tables: {e}")
-            LOGGER.error(f"Error deleting lineage from {source_table} to target tables: {e}")
+            print(f"Error creating lineage from {source_key} to target keys: {e}")
+            LOGGER.error(f"Error creating lineage from {source_key} to target keys: {e}")
             raise e
 
 
-
-# def create_lineage(self, source_table: str, target_tables: List[str], lineage_type: str, properties: Dict[str, Any] = None):
-#     """
-#     Create a lineage relationship between a source table and target tables.
-    
-#     :param source_table: The name of the source table.
-#     :param target_tables: A list of target table names.
-#     :param lineage_type: The type of lineage ("upstream" or "downstream").
-#     :param properties: Optional properties of the lineage.
-#     """
-#     try:
-#         if not properties:
-#             properties = {}
-
-#         # Ensure target_tables is a list
-#         if isinstance(target_tables, str):
-#             target_tables = [target_tables]
-
-#         # Update properties with essential metadata
-#         properties.update({
-#             'source_table': source_table,
-#             'target_tables': target_tables,
-#             'timestamp': int(time.time()),
-#             'key': f'{source_table}_{target_tables}_{int(time.time())}'
-#         })
-
-#         # Determine the relationship type and direction based on lineage_type
-#         if lineage_type.lower() == "upstream":
-#             relationship_type = "HAS_UPSTREAM"
-#             relationship_direction = "target)-[r:HAS_UPSTREAM]->(source"
-#         elif lineage_type.lower() == "downstream":
-#             relationship_type = "HAS_DOWNSTREAM"
-#             relationship_direction = "source)-[r:HAS_DOWNSTREAM]->(target"
-#         else:
-#             raise ValueError("Invalid lineage_type. Must be 'upstream' or 'downstream'.")
-
-#         lineage_query = textwrap.dedent(f"""
-#         MERGE (source:Table {{key: $source_table}})
-#         WITH source
-#         UNWIND $target_tables as target_table
-#         MERGE (target:Table {{key: target_table}})
-#         MERGE ({relationship_direction})  # Dynamic direction based on lineage_type
-#         SET r = $props
-#         RETURN count(r) as created_count
-#         """)
-
-#         params = {
-#             'source_table': source_table,
-#             'target_tables': target_tables,
-#             'props': properties  # Pass the properties correctly
-#         }
-
-#         # Execute the Cypher query and retrieve the result
-#         result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
-#         created_count = result[0]['created_count'] if result else 0
-
-#         print(f"Successfully created {created_count} {lineage_type} lineage relationships from {source_table} to target tables.")
-        
-#     except ValueError as ve:
-#         print(f"ValueError: {ve}")
-#     except Exception as e:
-#         print(f"An error occurred while creating lineage: {e}")
