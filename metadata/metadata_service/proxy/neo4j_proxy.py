@@ -2041,8 +2041,15 @@ class Neo4jProxy(BaseProxy):
                                                   }))
 
         # ToDo: Add a root_entity as an item, which will make it easier for lineage graph
-        return Lineage(key=id, upstream_entities=upstream_tables, downstream_entities=downstream_tables,
-                       direction=direction, depth=depth, downstream_count=len(downstream_tables), upstream_count=len(upstream_tables))
+        # return Lineage(key=id, upstream_entities=upstream_tables, downstream_entities=downstream_tables,
+        #                direction=direction, depth=depth, downstream_count=len(downstream_tables), upstream_count=len(upstream_tables))
+    
+        return Lineage(**{"key": id,
+                          "upstream_entities": upstream_tables,
+                          "downstream_entities": downstream_tables,
+                          "direction": direction, "depth": depth,
+                          "downstream_count":len(downstream_tables),
+                          "upstream_count":len(upstream_tables)})
 
     def _create_watermarks(self, wmk_records: List) -> List[Watermark]:
         watermarks = []

@@ -2,7 +2,7 @@ version: "3"
 services:
   neo4j:
     image: neo4j:3.5.26
-    # container_name: neo4j_amundsen
+    container_name: neo4j_amundsen
     environment:
       - NEO4J_AUTH=neo4j/test
     ulimits:
@@ -48,7 +48,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.metadata.public
-    # container_name: amundsenmetadata
+    container_name: amundsenmetadata
     depends_on:
       - neo4j
     ports:
