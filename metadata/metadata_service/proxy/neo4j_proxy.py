@@ -1931,125 +1931,157 @@ class Neo4jProxy(BaseProxy):
             results.append(DashboardSummary(**record))
         return {'dashboards': results}
 
-    @timer_with_counter
-    def get_lineage(self, *,
-                    id: str, resource_type: ResourceType, direction: str, depth: int = 1) -> Lineage:
-        """
-        Retrieves the lineage information for the specified resource type.
+    # @timer_with_counter
+    # def get_lineage(self, *,
+    #                 id: str, resource_type: ResourceType, direction: str, depth: int = 1) -> Lineage:
+    #     """
+    #     Retrieves the lineage information for the specified resource type.
 
-        :param id: key of a table or a column
-        :param resource_type: Type of the entity for which lineage is being retrieved
-        :param direction: Whether to get the upstream/downstream or both directions
-        :param depth: depth or level of lineage information
-        :return: The Lineage object with upstream & downstream lineage items
-        """
+    #     :param id: key of a table or a column
+    #     :param resource_type: Type of the entity for which lineage is being retrieved
+    #     :param direction: Whether to get the upstream/downstream or both directions
+    #     :param depth: depth or level of lineage information
+    #     :return: The Lineage object with upstream & downstream lineage items
+    #     """
+    #     try:
 
-        get_both_lineage_query = textwrap.dedent(u"""
-        MATCH (source:{resource} {{key: $query_key}})
-        OPTIONAL MATCH dpath=(source)-[downstream_len:HAS_DOWNSTREAM*..{depth}]->(downstream_entity:{resource})
-        OPTIONAL MATCH upath=(source)-[upstream_len:HAS_UPSTREAM*..{depth}]->(upstream_entity:{resource})
-        WITH downstream_entity, upstream_entity, downstream_len, upstream_len, upath, dpath
-        OPTIONAL MATCH (upstream_entity)-[:HAS_BADGE]->(upstream_badge:Badge)
-        OPTIONAL MATCH (downstream_entity)-[:HAS_BADGE]->(downstream_badge:Badge)
-        WITH CASE WHEN downstream_badge IS NULL THEN []
-        ELSE collect(distinct {{key:downstream_badge.key,category:downstream_badge.category}})
-        END AS downstream_badges, CASE WHEN upstream_badge IS NULL THEN []
-        ELSE collect(distinct {{key:upstream_badge.key,category:upstream_badge.category}})
-        END AS upstream_badges, upstream_entity, downstream_entity, upstream_len, downstream_len, upath, dpath
-        OPTIONAL MATCH (downstream_entity:{resource})-[downstream_read:READ_BY]->(:User)
-        WITH upstream_entity, downstream_entity, upstream_len, downstream_len, upath, dpath,
-        downstream_badges, upstream_badges, sum(downstream_read.read_count) as downstream_read_count
-        OPTIONAL MATCH (upstream_entity:{resource})-[upstream_read:READ_BY]->(:User)
-        WITH upstream_entity, downstream_entity, upstream_len, downstream_len,
-        downstream_badges, upstream_badges, downstream_read_count,
-        sum(upstream_read.read_count) as upstream_read_count, upath, dpath
-        WITH CASE WHEN upstream_len IS NULL THEN []
-        ELSE COLLECT(distinct{{level:SIZE(upstream_len), source:split(upstream_entity.key,'://')[0],
-        key:upstream_entity.key, badges:upstream_badges, usage:upstream_read_count, parent:nodes(upath)[-2].key}})
-        END AS upstream_entities, CASE WHEN downstream_len IS NULL THEN []
-        ELSE COLLECT(distinct{{level:SIZE(downstream_len), source:split(downstream_entity.key,'://')[0],
-        key:downstream_entity.key, badges:downstream_badges, usage:downstream_read_count, parent:nodes(dpath)[-2].key}})
-        END AS downstream_entities RETURN downstream_entities, upstream_entities
-        """).format(depth=depth, resource=resource_type.name)
+    #         get_both_lineage_query = textwrap.dedent(u"""
+    #         MATCH (source:{resource} {{key: $query_key}})
+    #         OPTIONAL MATCH dpath=(source)-[downstream_len:HAS_DOWNSTREAM*..{depth}]->(downstream_entity:{resource})
+    #         OPTIONAL MATCH upath=(source)-[upstream_len:HAS_UPSTREAM*..{depth}]->(upstream_entity:{resource})
+    #         WITH downstream_entity, upstream_entity, downstream_len, upstream_len, upath, dpath
+    #         OPTIONAL MATCH (upstream_entity)-[:HAS_BADGE]->(upstream_badge:Badge)
+    #         OPTIONAL MATCH (downstream_entity)-[:HAS_BADGE]->(downstream_badge:Badge)
+    #         WITH CASE WHEN downstream_badge IS NULL THEN []
+    #         ELSE collect(distinct {{key:downstream_badge.key,category:downstream_badge.category}})
+    #         END AS downstream_badges, CASE WHEN upstream_badge IS NULL THEN []
+    #         ELSE collect(distinct {{key:upstream_badge.key,category:upstream_badge.category}})
+    #         END AS upstream_badges, upstream_entity, downstream_entity, upstream_len, downstream_len, upath, dpath
+    #         OPTIONAL MATCH (downstream_entity:{resource})-[downstream_read:READ_BY]->(:User)
+    #         WITH upstream_entity, downstream_entity, upstream_len, downstream_len, upath, dpath,
+    #         downstream_badges, upstream_badges, sum(downstream_read.read_count) as downstream_read_count
+    #         OPTIONAL MATCH (upstream_entity:{resource})-[upstream_read:READ_BY]->(:User)
+    #         WITH upstream_entity, downstream_entity, upstream_len, downstream_len,
+    #         downstream_badges, upstream_badges, downstream_read_count,
+    #         sum(upstream_read.read_count) as upstream_read_count, upath, dpath
+    #         WITH CASE WHEN upstream_len IS NULL THEN []
+    #         ELSE COLLECT(distinct{{level:SIZE(upstream_len), source:split(upstream_entity.key,'://')[0],
+    #         key:upstream_entity.key, badges:upstream_badges, usage:upstream_read_count, parent:nodes(upath)[-2].key}})
+    #         END AS upstream_entities, CASE WHEN downstream_len IS NULL THEN []
+    #         ELSE COLLECT(distinct{{level:SIZE(downstream_len), source:split(downstream_entity.key,'://')[0],
+    #         key:downstream_entity.key, badges:downstream_badges, usage:downstream_read_count, parent:nodes(dpath)[-2].key}})
+    #         END AS downstream_entities RETURN downstream_entities, upstream_entities
+    #         """).format(depth=depth, resource=resource_type.name)
 
-        get_upstream_lineage_query = textwrap.dedent(u"""
-        MATCH (source:{resource} {{key: $query_key}})
-        OPTIONAL MATCH path=(source)-[upstream_len:HAS_UPSTREAM*..{depth}]->(upstream_entity:{resource})
-        WITH upstream_entity, upstream_len, path
-        OPTIONAL MATCH (upstream_entity)-[:HAS_BADGE]->(upstream_badge:Badge)
-        WITH CASE WHEN upstream_badge IS NULL THEN []
-        ELSE collect(distinct {{key:upstream_badge.key,category:upstream_badge.category}})
-        END AS upstream_badges, upstream_entity, upstream_len, path
-        OPTIONAL MATCH (upstream_entity:{resource})-[upstream_read:READ_BY]->(:User)
-        WITH upstream_entity, upstream_len, upstream_badges,
-        sum(upstream_read.read_count) as upstream_read_count, path
-        WITH CASE WHEN upstream_len IS NULL THEN []
-        ELSE COLLECT(distinct{{level:SIZE(upstream_len), source:split(upstream_entity.key,'://')[0],
-        key:upstream_entity.key, badges:upstream_badges, usage:upstream_read_count, parent:nodes(path)[-2].key}})
-        END AS upstream_entities RETURN upstream_entities
-        """).format(depth=depth, resource=resource_type.name)
+    #         get_upstream_lineage_query = textwrap.dedent(u"""
+    #         MATCH (source:{resource} {{key: $query_key}})
+    #         OPTIONAL MATCH path=(source)-[upstream_len:HAS_UPSTREAM*..{depth}]->(upstream_entity:{resource})
+    #         WITH upstream_entity, upstream_len, path
+    #         OPTIONAL MATCH (upstream_entity)-[:HAS_BADGE]->(upstream_badge:Badge)
+    #         WITH CASE WHEN upstream_badge IS NULL THEN []
+    #         ELSE collect(distinct {{key:upstream_badge.key,category:upstream_badge.category}})
+    #         END AS upstream_badges, upstream_entity, upstream_len, path
+    #         OPTIONAL MATCH (upstream_entity:{resource})-[upstream_read:READ_BY]->(:User)
+    #         WITH upstream_entity, upstream_len, upstream_badges,
+    #         sum(upstream_read.read_count) as upstream_read_count, path
+    #         WITH CASE WHEN upstream_len IS NULL THEN []
+    #         ELSE COLLECT(distinct{{level:SIZE(upstream_len), source:split(upstream_entity.key,'://')[0],
+    #         key:upstream_entity.key, name:upstream_entity.name, badges:upstream_badges, usage:upstream_read_count, parent:nodes(path)[-2].key}})
+    #         END AS upstream_entities RETURN upstream_entities
+    #         """).format(depth=depth, resource=resource_type.name)
 
-        get_downstream_lineage_query = textwrap.dedent(u"""
-        MATCH (source:{resource} {{key: $query_key}})
-        OPTIONAL MATCH path=(source)-[downstream_len:HAS_DOWNSTREAM*..{depth}]->(downstream_entity:{resource})
-        WITH downstream_entity, downstream_len, path
-        OPTIONAL MATCH (downstream_entity)-[:HAS_BADGE]->(downstream_badge:Badge)
-        WITH CASE WHEN downstream_badge IS NULL THEN []
-        ELSE collect(distinct {{key:downstream_badge.key,category:downstream_badge.category}})
-        END AS downstream_badges, downstream_entity, downstream_len, path
-        OPTIONAL MATCH (downstream_entity:{resource})-[downstream_read:READ_BY]->(:User)
-        WITH downstream_entity, downstream_len, downstream_badges,
-        sum(downstream_read.read_count) as downstream_read_count, path
-        WITH CASE WHEN downstream_len IS NULL THEN []
-        ELSE COLLECT(distinct{{level:SIZE(downstream_len), source:split(downstream_entity.key,'://')[0],
-        key:downstream_entity.key, badges:downstream_badges, usage:downstream_read_count, parent:nodes(path)[-2].key}})
-        END AS downstream_entities RETURN downstream_entities
-        """).format(depth=depth, resource=resource_type.name)
+    #         get_downstream_lineage_query = textwrap.dedent(u"""
+    #         MATCH (source:{resource} {{key: $query_key}})
+    #         OPTIONAL MATCH path=(source)-[downstream_len:HAS_DOWNSTREAM*..{depth}]->(downstream_entity:{resource})
+    #         WITH downstream_entity, downstream_len, path
+    #         OPTIONAL MATCH (downstream_entity)-[:HAS_BADGE]->(downstream_badge:Badge)
+    #         WITH CASE WHEN downstream_badge IS NULL THEN []
+    #         ELSE collect(distinct {{key:downstream_badge.key,category:downstream_badge.category}})
+    #         END AS downstream_badges, downstream_entity, downstream_len, path
+    #         OPTIONAL MATCH (downstream_entity:{resource})-[downstream_read:READ_BY]->(:User)
+    #         WITH downstream_entity, downstream_len, downstream_badges,
+    #         sum(downstream_read.read_count) as downstream_read_count, path
+    #         WITH CASE WHEN downstream_len IS NULL THEN []
+    #         ELSE COLLECT(distinct{{level:SIZE(downstream_len), source:split(downstream_entity.key,'://')[0],
+    #         key:downstream_entity.key, name:downstream_entity.name, badges:downstream_badges, usage:downstream_read_count, parent:nodes(path)[-2].key}})
+    #         END AS downstream_entities RETURN downstream_entities
+    #         """).format(depth=depth, resource=resource_type.name)
 
-        if direction == 'upstream':
-            lineage_query = get_upstream_lineage_query
+    #         if direction == 'upstream':
+    #             lineage_query = get_upstream_lineage_query
 
-        elif direction == 'downstream':
-            lineage_query = get_downstream_lineage_query
+    #         elif direction == 'downstream':
+    #             lineage_query = get_downstream_lineage_query
 
-        else:
-            lineage_query = get_both_lineage_query
+    #         else:
+    #             lineage_query = get_both_lineage_query
 
-        records = self._execute_cypher_query(statement=lineage_query,
-                                             param_dict={'query_key': id})
-        result = get_single_record(records)
+    #         records = self._execute_cypher_query(statement=lineage_query,
+    #                                                 param_dict={'query_key': id})
+    #         result = get_single_record(records)
 
-        downstream_tables = []
-        upstream_tables = []
+    #         downstream_tables = []
+    #         upstream_tables = []
+    #         for downstream in result.get("downstream_entities") or []:
+               
 
-        for downstream in result.get("downstream_entities") or []:
-            downstream_tables.append(LineageItem(**{"key": downstream["key"],
-                                                    "source": downstream["source"],
-                                                    "level": downstream["level"],
-                                                    "badges": self._make_badges(downstream["badges"]),
-                                                    "usage": downstream.get("usage", 0),
-                                                    "parent": downstream.get("parent", '')
-                                                    }))
+    #              # Create the original LineageItem
+    #             original_item = LineageItem(**{
+    #               "key": downstream["key"],
+    #               "source": downstream["source"],
+    #               "level": downstream["level"],
+    #               "badges": self._make_badges(downstream["badges"]),
+    #               "usage": downstream.get("usage", 0),
+    #               "parent": downstream.get("parent", ''),
+    #                 })
+                
+    #             # Create a dictionary with the original item and the name
+    #             enhanced_item = {
+    #                 **original_item.__dict__,
+    #                 "name": downstream.get("name", '')
+    #             }
+               
+                
+    #             downstream_tables.append(enhanced_item)
+    #             # downstream_tables.append(LineageItem(**{"key": downstream["key"],
+    #             #                                         "source": downstream["source"],
+    #             #                                         "level": downstream["level"],
+    #             #                                         "badges": self._make_badges(downstream["badges"]),
+    #             #                                         "usage": downstream.get("usage", 0),
+    #             #                                         "parent": downstream.get("parent", ''),
+    #             #                                         "name": downstream.get("name", '')  # Force append the name attribute
+    #             #                                         }))
 
-        for upstream in result.get("upstream_entities") or []:
-            upstream_tables.append(LineageItem(**{"key": upstream["key"],
-                                                  "source": upstream["source"],
-                                                  "level": upstream["level"],
-                                                  "badges": self._make_badges(upstream["badges"]),
-                                                  "usage": upstream.get("usage", 0),
-                                                  "parent": upstream.get("parent", '')
-                                                  }))
+            
 
-        # ToDo: Add a root_entity as an item, which will make it easier for lineage graph
-        # return Lineage(key=id, upstream_entities=upstream_tables, downstream_entities=downstream_tables,
-        #                direction=direction, depth=depth, downstream_count=len(downstream_tables), upstream_count=len(upstream_tables))
-    
-        return Lineage(**{"key": id,
-                          "upstream_entities": upstream_tables,
-                          "downstream_entities": downstream_tables,
-                          "direction": direction, "depth": depth,
-                          "downstream_count":len(downstream_tables),
-                          "upstream_count":len(upstream_tables)})
+    #         for upstream in result.get("upstream_entities") or []:
+    #             upstream_tables.append(LineageItem(**{"key": upstream["key"],
+    #                                                     "source": upstream["source"],
+    #                                                     "level": upstream["level"],
+    #                                                     "badges": self._make_badges(upstream["badges"]),
+    #                                                     "usage": upstream.get("usage", 0),
+    #                                                     "parent": upstream.get("parent", '')
+    #                                                     }))
+
+    #         # ToDo: Add a root_entity as an item, which will make it easier for lineage graph
+    #         # return Lineage(key=id, upstream_entities=upstream_tables, downstream_entities=downstream_tables,
+    #         #                direction=direction, depth=depth, downstream_count=len(downstream_tables), upstream_count=len(upstream_tables))
+
+    #         # return Lineage(**{"key": id,
+    #         #                     "upstream_entities": upstream_tables,
+    #         #                     "downstream_entities": downstream_tables,
+    #         #                     "direction": direction, "depth": depth,
+    #         #                     "downstream_count":len(downstream_tables),
+    #         #                     "upstream_count":len(upstream_tables)})
+    #         return {"key": id,
+    #                 "upstream_entities": upstream_tables,
+    #                 "downstream_entities": downstream_tables,
+    #                 "direction": direction, "depth": depth,
+    #                 "downstream_count":len(downstream_tables),
+    #                 "upstream_count":len(upstream_tables)}
+    #     except Exception as e:
+    #         LOGGER.exception(f'Error retrieving lineage for {resource_type} {id}')
+    #         raise e
 
     def _create_watermarks(self, wmk_records: List) -> List[Watermark]:
         watermarks = []
@@ -2373,5 +2405,145 @@ class Neo4jProxy(BaseProxy):
             print(f"Error creating lineage from {source_key} to target keys: {e}")
             LOGGER.error(f"Error creating lineage from {source_key} to target keys: {e}")
             raise e
+    
+    @timer_with_counter
+    def get_lineage(self, *,
+                    id: str, resource_type: ResourceType, direction: str, depth: int = 1) -> Lineage:
+        """
+        Retrieves the lineage information for the specified resource type.
 
+        :param id: key of a table or a column
+        :param resource_type: Type of the entity for which lineage is being retrieved
+        :param direction: Whether to get the upstream/downstream or both directions
+        :param depth: depth or level of lineage information
+        :return: The Lineage object with upstream & downstream lineage items
+        """
+        try:
 
+            get_both_lineage_query = textwrap.dedent(u"""
+            MATCH (source:{resource} {{key: $query_key}})
+            OPTIONAL MATCH dpath=(source)-[downstream_len:HAS_DOWNSTREAM*..{depth}]->(downstream_entity:{resource})
+            OPTIONAL MATCH upath=(source)-[upstream_len:HAS_UPSTREAM*..{depth}]->(upstream_entity:{resource})
+            WITH downstream_entity, upstream_entity, downstream_len, upstream_len, upath, dpath
+            OPTIONAL MATCH (upstream_entity)-[:HAS_BADGE]->(upstream_badge:Badge)
+            OPTIONAL MATCH (downstream_entity)-[:HAS_BADGE]->(downstream_badge:Badge)
+            WITH CASE WHEN downstream_badge IS NULL THEN []
+            ELSE collect(distinct {{key:downstream_badge.key,category:downstream_badge.category}})
+            END AS downstream_badges, CASE WHEN upstream_badge IS NULL THEN []
+            ELSE collect(distinct {{key:upstream_badge.key,category:upstream_badge.category}})
+            END AS upstream_badges, upstream_entity, downstream_entity, upstream_len, downstream_len, upath, dpath
+            OPTIONAL MATCH (downstream_entity:{resource})-[downstream_read:READ_BY]->(:User)
+            WITH upstream_entity, downstream_entity, upstream_len, downstream_len, upath, dpath,
+            downstream_badges, upstream_badges, sum(downstream_read.read_count) as downstream_read_count
+            OPTIONAL MATCH (upstream_entity:{resource})-[upstream_read:READ_BY]->(:User)
+            WITH upstream_entity, downstream_entity, upstream_len, downstream_len,
+            downstream_badges, upstream_badges, downstream_read_count,
+            sum(upstream_read.read_count) as upstream_read_count, upath, dpath
+            WITH CASE WHEN upstream_len IS NULL THEN []
+            ELSE COLLECT(distinct{{level:SIZE(upstream_len), source:split(upstream_entity.key,'://')[0],
+            key:upstream_entity.key, name:upstream_entity.name, badges:upstream_badges, usage:upstream_read_count, parent:nodes(upath)[-2].key}})
+            END AS upstream_entities, CASE WHEN downstream_len IS NULL THEN []
+            ELSE COLLECT(distinct{{level:SIZE(downstream_len), source:split(downstream_entity.key,'://')[0],
+            key:downstream_entity.key, name:downstream_entity.name, badges:downstream_badges, usage:downstream_read_count, parent:nodes(dpath)[-2].key}})
+            END AS downstream_entities RETURN downstream_entities, upstream_entities
+            """).format(depth=depth, resource=resource_type.name)
+
+            get_upstream_lineage_query = textwrap.dedent(u"""
+            MATCH (source:{resource} {{key: $query_key}})
+            OPTIONAL MATCH path=(source)-[upstream_len:HAS_UPSTREAM*..{depth}]->(upstream_entity:{resource})
+            WITH upstream_entity, upstream_len, path
+            OPTIONAL MATCH (upstream_entity)-[:HAS_BADGE]->(upstream_badge:Badge)
+            WITH CASE WHEN upstream_badge IS NULL THEN []
+            ELSE collect(distinct {{key:upstream_badge.key,category:upstream_badge.category}})
+            END AS upstream_badges, upstream_entity, upstream_len, path
+            OPTIONAL MATCH (upstream_entity:{resource})-[upstream_read:READ_BY]->(:User)
+            WITH upstream_entity, upstream_len, upstream_badges,
+            sum(upstream_read.read_count) as upstream_read_count, path
+            WITH CASE WHEN upstream_len IS NULL THEN []
+            ELSE COLLECT(distinct{{level:SIZE(upstream_len), source:split(upstream_entity.key,'://')[0],
+            key:upstream_entity.key, name:upstream_entity.name, badges:upstream_badges, usage:upstream_read_count, parent:nodes(path)[-2].key}})
+            END AS upstream_entities RETURN upstream_entities
+            """).format(depth=depth, resource=resource_type.name)
+
+            get_downstream_lineage_query = textwrap.dedent(u"""
+            MATCH (source:{resource} {{key: $query_key}})
+            OPTIONAL MATCH path=(source)-[downstream_len:HAS_DOWNSTREAM*..{depth}]->(downstream_entity:{resource})
+            WITH downstream_entity, downstream_len, path
+            OPTIONAL MATCH (downstream_entity)-[:HAS_BADGE]->(downstream_badge:Badge)
+            WITH CASE WHEN downstream_badge IS NULL THEN []
+            ELSE collect(distinct {{key:downstream_badge.key,category:downstream_badge.category}})
+            END AS downstream_badges, downstream_entity, downstream_len, path
+            OPTIONAL MATCH (downstream_entity:{resource})-[downstream_read:READ_BY]->(:User)
+            WITH downstream_entity, downstream_len, downstream_badges,
+            sum(downstream_read.read_count) as downstream_read_count, path
+            WITH CASE WHEN downstream_len IS NULL THEN []
+            ELSE COLLECT(distinct{{level:SIZE(downstream_len), source:split(downstream_entity.key,'://')[0],
+            key:downstream_entity.key, name:downstream_entity.name, badges:downstream_badges, usage:downstream_read_count, parent:nodes(path)[-2].key}})
+            END AS downstream_entities RETURN downstream_entities
+            """).format(depth=depth, resource=resource_type.name)
+
+            if direction == 'upstream':
+                lineage_query = get_upstream_lineage_query
+
+            elif direction == 'downstream':
+                lineage_query = get_downstream_lineage_query
+
+            else:
+                lineage_query = get_both_lineage_query
+
+            records = self._execute_cypher_query(statement=lineage_query,
+                                                    param_dict={'query_key': id})
+            result = get_single_record(records)
+
+            downstream_tables = []
+            upstream_tables = []
+            for downstream in result.get("downstream_entities") or []:
+               
+
+                 # Create the original LineageItem
+                original_item = LineageItem(**{
+                  "key": downstream["key"],
+                  "source": downstream["source"],
+                  "level": downstream["level"],
+                  "badges": self._make_badges(downstream["badges"]),
+                  "usage": downstream.get("usage", 0),
+                  "parent": downstream.get("parent", ''),
+                    })
+                
+                # Create a dictionary with the original item and the name
+                enhanced_item = {
+                    **original_item.__dict__,
+                    "name": downstream.get("name", '')
+                }
+               
+                
+                downstream_tables.append(enhanced_item)
+               
+            for upstream in result.get("upstream_entities") or []:
+                      # Create the original LineageItem
+                original_item = LineageItem(**{
+                  "key": upstream["key"],
+                  "source": upstream["source"],
+                  "level": upstream["level"],
+                  "badges": self._make_badges(upstream["badges"]),
+                  "usage": upstream.get("usage", 0),
+                  "parent": upstream.get("parent", ''),
+                    })
+                
+                 # Create a dictionary with the original item and the name
+                enhanced_item = {
+                    **original_item.__dict__,
+                    "name": upstream.get("name", '')
+                }
+                upstream_tables.append(enhanced_item)
+
+            return {"key": id,
+                    "upstream_entities": upstream_tables,
+                    "downstream_entities": downstream_tables,
+                    "direction": direction, "depth": depth,
+                    "downstream_count":len(downstream_tables),
+                    "upstream_count":len(upstream_tables)}
+        except Exception as e:
+            LOGGER.exception(f'Error retrieving lineage for {resource_type} {id}')
+            raise e
+   

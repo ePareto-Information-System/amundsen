@@ -91,7 +91,25 @@ class CustomColumnLineageAPI(Resource):
         except Exception as e:
             return {'message': f'Exception raised when deleting lineage: {e}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+def serialize_badge(badge):
+    return {
+        'badge_name': badge.badge_name,
+        'category': badge.category
+    }
 
+def flatten_lineage_response(response):
+    flattened = response.copy()
+    
+    for entity_list in ['upstream_entities', 'downstream_entities']:
+        flattened[entity_list] = [
+            {
+                **entity,
+                'badges': [serialize_badge(badge) for badge in entity['badges']]
+            }
+            for entity in flattened[entity_list]
+        ]
+    
+    return flattened
 
 class CustomTableLineageAPI(Resource):
     def __init__(self) -> None:
@@ -115,8 +133,10 @@ class CustomTableLineageAPI(Resource):
                                               resource_type=ResourceType.Table,
                                               direction=direction,
                                               depth=depth)
-            schema = LineageSchema()
-            return schema.dump(lineage), HTTPStatus.OK
+            print(lineage)
+            #schema = LineageSchema()
+            return flatten_lineage_response(lineage), HTTPStatus.OK
+            #return schema.dump(lineage), HTTPStatus.OK
         except Exception as e:
             return {'message': f'Exception raised when getting lineage: {e}'}, HTTPStatus.NOT_FOUND
  
