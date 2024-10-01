@@ -11,7 +11,7 @@ requestBody:
         properties:
           source_id:
             type: string
-          target_id:
+          dependency_keys:
             type: array
             items:
               type: string
@@ -19,7 +19,7 @@ requestBody:
             type: string
         required:
           - source_id
-          - target_id
+          - dependency_keys
           - lineage_type
 
 responses:

@@ -1,0 +1,3 @@
+source_table_key,target_table_key
+druid://gold.druid/r4d_community,druid://gold.druid/r4d_hospitalization
+

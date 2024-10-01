@@ -133,7 +133,6 @@ class CustomTableLineageAPI(Resource):
                                               resource_type=ResourceType.Table,
                                               direction=direction,
                                               depth=depth)
-            print(lineage)
             #schema = LineageSchema()
             return flatten_lineage_response(lineage), HTTPStatus.OK
             #return schema.dump(lineage), HTTPStatus.OK
@@ -148,14 +147,20 @@ class CustomTableLineageAPI(Resource):
             data = request.get_json()
             # Extract the necessary information from the request data
             source_id = data.get('source_id')
-            target_id = data.get('target_id')
             lineage_type = data.get('lineage_type')
+            dependency_keys = data.get('dependency_keys')
             
             # Create the lineage using the client
-            lineage_response = self.client.create_lineage(source_key=source_id,
-                                                 target_keys=target_id,
-                                                    lineage_type=lineage_type,
-                                                     resource_type=ResourceType.Table,
+                        # lineage_response = self.client.create_lineage(source_key=source_id,
+                        #                          target_keys=target_id,
+                        #                             lineage_type=lineage_type,
+                        #                              resource_type=ResourceType.Table,
+                        #                          properties={})
+            lineage_response = self.client.create_lineage(table_key=source_id,
+                                                 dependency_keys=dependency_keys,
+                                                lineage_type=lineage_type,
+                                                  
+                                                   #  resource_type=ResourceType.Table,
                                                  properties={})
             
             # Return the lineage response directly as JSON
@@ -176,7 +181,9 @@ class CustomTableLineageAPI(Resource):
             
             # Delete the lineage using the client
             deleted_count = self.client.delete_lineage(source_key=source_id,
-                                                   target_keys=target_id, lineage_type=lineage_type, resource_type=ResourceType.Table)
+                                                   target_keys=target_id, 
+                                                   lineage_type=lineage_type, 
+                                                   resource_type=ResourceType.Table)
         
         # Return the response with deleted count
             return {'message': f"{deleted_count}"}, HTTPStatus.OK
