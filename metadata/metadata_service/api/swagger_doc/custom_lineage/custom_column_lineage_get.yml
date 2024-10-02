@@ -10,11 +10,11 @@ requestBody:
         properties:
           column_id:
             type: string
-            example: "hive://gold.test_schema/test_table1"
+            example: "hive://gold.test_schema/test_table1/col1"
 
           direction:
             type: string
-            example: "upstream"
+            example: "both"
           depth:
             type: integer
             example: 1

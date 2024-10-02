@@ -2347,81 +2347,7 @@ class Neo4jProxy(BaseProxy):
             LOGGER.error(f"Error deleting lineage from {source_key} to target tables: {e}")
             raise e
         
-        # create  lineage function
 
-
-    def create_lineage_old(self, source_key: str, target_keys: List[str], lineage_type: str, resource_type: ResourceType, properties: Dict[str, Any] = None):
-        """
-        Create a new lineage between a source and target resources (table or column).
-        :param source_key: The key of the source resource.
-        :param target_keys: A list of target resource keys.
-        :param lineage_type: The type of lineage ("upstream" or "downstream").
-        :param resource_type: The type of resource (e.g., "Table" or "Column").
-        :param properties: Optional properties of the lineage.
-        """
-        try:
-            if not properties:
-                properties = {}
-
-        # Ensure target_keys is a list
-            if isinstance(target_keys, str):
-                target_keys = [target_keys]
-
-            properties.update({
-                'source_key': source_key,
-                'target_keys': target_keys,
-                'timestamp': int(time.time()),
-                'key': f'{source_key}_{target_keys}_{int(time.time())}'
-            })
-
-        # Determine the relationship type and direction based on lineage_type
-            if lineage_type.lower() == "upstream":
-                relationship_type = "HAS_UPSTREAM"
-                query_direction = f"""
-                MERGE (target:{resource_type.name} {{key: target_key}})
-                MERGE (target)-[r:{relationship_type}]->(source)
-                """
-            elif lineage_type.lower() == "downstream":
-                relationship_type = "HAS_DOWNSTREAM"
-                query_direction = f"""
-                MERGE (target:{resource_type.name} {{key: target_key}})
-                MERGE (source)-[r:{relationship_type}]->(target)
-                """
-            else:
-                raise ValueError("Invalid lineage_type. Must be 'upstream' or 'downstream'.")
-
-            lineage_query = textwrap.dedent(f"""
-            MERGE (source:{resource_type.name} {{key: $source_key}})
-            WITH source
-            UNWIND $target_keys as target_key
-            {query_direction}
-            SET r = $props
-            RETURN count(r) as created_count
-            """)
-
-            params = {
-                'source_key': source_key,
-                'target_keys': target_keys,
-                'props': properties
-            }
-
-            result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
-            created_count = result[0]['created_count'] if result else 0
-            LOGGER.info(f"Successfully created {created_count} lineage relationships from {source_key} to target keys.")
-            return {
-                'source_key': source_key,
-                'resource_type':resource_type.name,
-                'target_keys': target_keys,
-                'lineage_type': lineage_type,
-                'created_count': created_count,
-                'properties': properties
-            }
-
-        except Exception as e:
-            print(f"Error creating lineage from {source_key} to target keys: {e}")
-            LOGGER.error(f"Error creating lineage from {source_key} to target keys: {e}")
-            raise e
-    
     @timer_with_counter
     def get_lineage(self, *,
                     id: str, resource_type: ResourceType, direction: str, depth: int = 1) -> Lineage:
@@ -2567,7 +2493,7 @@ class Neo4jProxy(BaseProxy):
 
 
 
-    def create_lineage(self, table_key: str, lineage_type: str, dependency_keys: List[str], properties: Dict[str, Any] = None):
+    def create_lineage_old(self, table_key: str, lineage_type: str, resource_type: ResourceType, dependency_keys: List[str], properties: Dict[str, Any] = None):
         """
         Create table lineage relationships (both upstream and downstream).
         :param table_key: The key of the source table.
@@ -2625,8 +2551,8 @@ class Neo4jProxy(BaseProxy):
             relationships = []
             for dependency_key in dependency_keys:
                 relationship = GraphRelationship(
-                    start_label= 'Table',
-                    end_label= 'Table',
+                    start_label= resource_type.name,
+                    end_label= resource_type.name,
                     start_key=table_key,
                     end_key=dependency_key,
                     type=relationship_type,
@@ -2659,7 +2585,7 @@ class Neo4jProxy(BaseProxy):
 
             result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
             created_count = result[0]['created_count'] if result else 0
-            LOGGER.info(f"Successfully created {created_count} lineage relationships for table {table_key}.")
+            LOGGER.info(f"Successfully created {created_count} lineage relationships for {resource_type.name} {table_key}.")
 
             return {
                 'created_lineage': {
@@ -2671,7 +2597,7 @@ class Neo4jProxy(BaseProxy):
             }
         
         except Exception as e:
-            LOGGER.error(f"Error creating lineage for table {table_key}: {e}")
+            LOGGER.error(f"Error creating lineage for {resource_type.name} {table_key}: {e}")
             raise e
             
     def delete_lineage(self, source_key: str, target_keys: List[str], lineage_type: str, resource_type: ResourceType):
@@ -2717,4 +2643,117 @@ class Neo4jProxy(BaseProxy):
         except Exception as e:
             print(f"Error deleting {lineage_type} lineage between {source_key} and target keys: {e}")
             LOGGER.error(f"Error deleting {lineage_type} lineage between {source_key} and target keys: {e}")
-            raise e        
+            raise e
+
+    def create_lineage(
+            self,
+            source_key: str,
+            lineage_type: str,
+            resource_type: ResourceType,
+            dependency_keys: List[str],
+            properties: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Create table lineage relationships (both upstream and downstream).
+
+        :param source_key: The key of the source.
+        :param lineage_type: The type of lineage relationship ('upstream' or 'downstream').
+        :param resource_type: The type of the resource (e.g., Table).
+        :param dependency_keys: A list of target table keys to establish lineage with.
+        :param properties: Optional properties to set on the relationship.
+        :return: A dictionary containing details of the created lineage relationships.
+        """
+        try:
+            properties = properties or {}
+
+            # Capture timestamp once for consistency
+            current_timestamp = int(time.time())
+            unique_id = uuid.uuid4()
+            joined_dependency_keys = "_".join(dependency_keys) if dependency_keys else "none"
+
+            properties.update({
+                'source_key': source_key,
+                'dependency_keys': dependency_keys,
+                'timestamp': current_timestamp,
+                'key': f'{source_key}_{joined_dependency_keys}_{unique_id}'
+            })
+
+            # Determine relationship type from lineage_type
+            if lineage_type == 'upstream':
+                relationship_type = "HAS_UPSTREAM"
+                reverse_type = "HAS_DOWNSTREAM"
+            elif lineage_type == 'downstream':
+                relationship_type = "HAS_DOWNSTREAM"
+                reverse_type = "HAS_UPSTREAM"
+            else:
+                raise ValueError("Invalid lineage_type. Must be 'upstream' or 'downstream'.")
+
+            # Generate Cypher query
+            lineage_query = textwrap.dedent(f"""
+                MATCH (source:{resource_type.name} {{key: $source_key}})
+                WITH source
+                UNWIND $relationships as rel
+                MATCH (target:{resource_type.name} {{key: rel.end_key}})
+                MERGE (source)-[r:{relationship_type}]->(target)
+                SET r += rel.attributes
+                RETURN count(r) as created_count
+            """)
+
+            # Create relationships
+            relationships = [
+                GraphRelationship(
+                    start_label=resource_type.name,
+                    end_label=resource_type.name,
+                    start_key=source_key,
+                    end_key=dep_key,
+                    type=relationship_type,
+                    reverse_type=reverse_type,
+                    attributes={
+                        'timestamp': current_timestamp,
+                        'key': f'{source_key}_{dep_key}_{unique_id}'
+                    }
+                )
+                for dep_key in dependency_keys
+            ]
+
+            if not relationships:
+                LOGGER.info(f"No dependencies provided for table {source_key}.")
+                return {
+                    'created_lineage': {
+                        'source_key': source_key,
+                        'lineage_type': lineage_type,
+                        'dependency_keys': dependency_keys,
+                        'created_count': 0,
+                        'properties': properties
+                    }
+                }
+
+            # Prepare parameters for Cypher query
+            params = {
+                'source_key': source_key,
+                'relationships': [dict(r._asdict()) for r in relationships]
+
+                # Alternatively, if GraphRelationship is a dataclass, use asdict
+                # 'relationships': [asdict(rel) for rel in relationships],
+            }
+
+            # Execute Cypher query
+            result = self._execute_cypher_query(statement=lineage_query, param_dict=params)
+            created_count = result[0]['created_count'] if result else 0
+            LOGGER.info(
+                f"Successfully created {created_count} {lineage_type} lineage relationships for {resource_type.name} {source_key}."
+            )
+
+            return {
+                'created_lineage': {
+                    'source_key': source_key,
+                    'dependency_keys': dependency_keys,
+                    'lineage_type': lineage_type,
+                    'created_count': created_count,
+                    'properties': properties
+                }
+            }
+
+        except Exception as e:
+            LOGGER.error(f"Error creating lineage for {resource_type.name} {source_key}: {e}")
+            raise e

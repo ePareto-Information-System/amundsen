@@ -15,7 +15,25 @@ from metadata_service.proxy import get_proxy_client
 LOGGER = logging.getLogger(__name__)
 
 
+def serialize_badge(badge):
+    return {
+        'badge_name': badge.badge_name,
+        'category': badge.category
+    }
 
+def flatten_lineage_response(response):
+    flattened = response.copy()
+    
+    for entity_list in ['upstream_entities', 'downstream_entities']:
+        flattened[entity_list] = [
+            {
+                **entity,
+                'badges': [serialize_badge(badge) for badge in entity['badges']]
+            }
+            for entity in flattened[entity_list]
+        ]
+    
+    return flattened
 
 
 
@@ -44,7 +62,9 @@ class CustomColumnLineageAPI(Resource):
                                               direction=direction,
                                               depth=depth)
             schema = LineageSchema()
-            return schema.dump(lineage), HTTPStatus.OK
+            return flatten_lineage_response(lineage), HTTPStatus.OK
+
+            #return schema.dump(lineage), HTTPStatus.OK
         except Exception as e:
             return {'message': f'Exception raised when getting lineage: {e}'}, HTTPStatus.NOT_FOUND
         
@@ -56,12 +76,12 @@ class CustomColumnLineageAPI(Resource):
             data = request.get_json()
             # Extract the necessary information from the request data
             source_id = data.get('source_id')
-            target_id = data.get('target_id')
+            dependency_keys = data.get('dependency_keys')
             lineage_type = data.get('lineage_type')
             
             # Create the lineage using the client
             lineage_response = self.client.create_lineage(source_key=source_id,
-                                                 target_keys=target_id,
+                                                 dependency_keys=dependency_keys,
                                                     lineage_type=lineage_type,
                                                      resource_type=ResourceType.Column,
                                                  properties={})
@@ -91,25 +111,7 @@ class CustomColumnLineageAPI(Resource):
         except Exception as e:
             return {'message': f'Exception raised when deleting lineage: {e}'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
-def serialize_badge(badge):
-    return {
-        'badge_name': badge.badge_name,
-        'category': badge.category
-    }
 
-def flatten_lineage_response(response):
-    flattened = response.copy()
-    
-    for entity_list in ['upstream_entities', 'downstream_entities']:
-        flattened[entity_list] = [
-            {
-                **entity,
-                'badges': [serialize_badge(badge) for badge in entity['badges']]
-            }
-            for entity in flattened[entity_list]
-        ]
-    
-    return flattened
 
 class CustomTableLineageAPI(Resource):
     def __init__(self) -> None:
@@ -156,11 +158,10 @@ class CustomTableLineageAPI(Resource):
                         #                             lineage_type=lineage_type,
                         #                              resource_type=ResourceType.Table,
                         #                          properties={})
-            lineage_response = self.client.create_lineage(table_key=source_id,
+            lineage_response = self.client.create_lineage(source_key=source_id,
                                                  dependency_keys=dependency_keys,
                                                 lineage_type=lineage_type,
-                                                  
-                                                   #  resource_type=ResourceType.Table,
+                                                resource_type=ResourceType.Table,
                                                  properties={})
             
             # Return the lineage response directly as JSON
