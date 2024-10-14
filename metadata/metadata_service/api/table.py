@@ -151,7 +151,7 @@ class TableTagAPI(Resource):
         self._tag_common = TagCommon(client=self.client)
 
     @swag_from('swagger_doc/tag/tag_put.yml')
-    def put(self, id: str, tag: str) -> Iterable[Union[Mapping, int, None]]:
+    def put(self) -> Iterable[Union[Mapping, int, None]]:
         """
         API to add a tag to existing table uri.
 
@@ -159,17 +159,27 @@ class TableTagAPI(Resource):
         :param tag:
         :return:
         """
-        args = self.parser.parse_args()
+        #args = self.parser.parse_args()
         # use tag_type to distinguish between tag and badge
-        tag_type = args.get('tag_type', 'default')
+        data = request.get_json()
 
-        return self._tag_common.put(id=id,
+        if not data:
+            return {'message': 'No input data provided'}, HTTPStatus.BAD_REQUEST
+        tag = data.get('tag')
+        tag_type = data.get('tag_type', 'default')
+        key = data.get('key')
+
+        try:
+            message = self._tag_common.put(id=key,
                                     resource_type=ResourceType.Table,
                                     tag=tag,
                                     tag_type=tag_type)
+            return message
+        except:
+            return {'message': 'Internal server error!'}, HTTPStatus.INTERNAL_SERVER_ERROR
 
     @swag_from('swagger_doc/tag/tag_delete.yml')
-    def delete(self, id: str, tag: str) -> Iterable[Union[Mapping, int, None]]:
+    def delete(self) -> Iterable[Union[Mapping, int, None]]:
         """
         API to remove a association between a given tag and a table.
 
@@ -177,10 +187,16 @@ class TableTagAPI(Resource):
         :param tag:
         :return:
         """
-        args = self.parser.parse_args()
-        tag_type = args.get('tag_type', 'default')
+        data = request.get_json()
+        # args = self.parser.parse_args()
+        # tag_type = args.get('tag_type', 'default')
+        if not data:
+            return {'message': 'No input data provided'}, HTTPStatus.BAD_REQUEST
+        tag = data.get('tag')
+        tag_type = data.get('tag_type', 'default')
+        key = data.get('key')
 
-        return self._tag_common.delete(id=id,
+        return self._tag_common.delete(id=key,
                                        resource_type=ResourceType.Table,
                                        tag=tag,
                                        tag_type=tag_type)

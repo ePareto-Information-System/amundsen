@@ -123,7 +123,7 @@ def create_app(*, config_module_class: str) -> Flask:
     api.add_resource(TableDescriptionAPI,
                      '/table/<path:id>/description')
     api.add_resource(TableTagAPI,
-                     '/table/<path:id>/tag/<tag>')
+                     '/table/tag')
     api.add_resource(TableBadgeAPI,
                      '/table/<path:id>/badge/<badge>')
     api.add_resource(TableLineageAPI,

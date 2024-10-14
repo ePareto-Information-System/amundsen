@@ -3,6 +3,7 @@
 
 from http import HTTPStatus
 from typing import Any, Iterable, Mapping, Tuple, Union
+from urllib.parse import unquote
 
 from amundsen_common.entity.resource_type import ResourceType
 from flasgger import swag_from
@@ -55,6 +56,7 @@ class TagCommon:
         :param tag_type:
         :return:
         """
+        decoded_id = unquote(id)
 
         whitelist_badges = app.config.get('WHITELIST_BADGES', [])
         if tag_type == BADGE_TYPE:
@@ -69,29 +71,24 @@ class TagCommon:
                         {'message': 'The tag {} for id {} with type {} and resource_type {} '
                                     'is not added successfully as tag '
                                     'for it is reserved for badge'.format(tag,
-                                                                          id,
+                                                                          decoded_id,
                                                                           tag_type,
                                                                           resource_type.name)}, \
                         HTTPStatus.CONFLICT
 
             try:
-                self.client.add_tag(id=id,
+                message= self.client.add_tag(id=decoded_id,
                                     tag=tag,
                                     tag_type=tag_type,
                                     resource_type=resource_type)
-                return {'message': 'The tag {} for id {} with type {} and resource_type {} '
-                                   'is added successfully'.format(tag,
-                                                                  id,
-                                                                  tag_type,
-                                                                  resource_type.name)}, HTTPStatus.OK
-            except NotFoundException:
-                return \
-                    {'message': 'The tag {} for table_uri {} with type {} and resource_type {} '
-                                'is not added successfully'.format(tag,
-                                                                   id,
-                                                                   tag_type,
-                                                                   resource_type.name)}, \
-                    HTTPStatus.NOT_FOUND
+                return {'message': message}, HTTPStatus.OK
+                # return {'message': 'The tag {} for id {} with type {} and resource_type {} '
+                #                    'is added successfully'.format(tag,
+                #                                                   id,
+                #                                                   tag_type,
+                #                                                   resource_type.name)}, HTTPStatus.OK
+            except Exception as e:
+                return {'message': f'Exception raised when adding tag: {e}'}, HTTPStatus.NOT_FOUND
 
     def delete(self, id: str, tag: str,
                resource_type: ResourceType, tag_type: str = 'default') -> Tuple[Any, HTTPStatus]:

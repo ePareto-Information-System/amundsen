@@ -8,6 +8,7 @@ import time
 from random import randint
 from typing import (Any, Dict, Iterable, List, Optional, Tuple,  # noqa: F401
                     Union, no_type_check)
+from urllib.parse import quote
 
 import neo4j
 from amundsen_common.entity.resource_type import ResourceType, to_resource_type
@@ -1033,64 +1034,123 @@ class Neo4jProxy(BaseProxy):
 
         return results
 
+    # @timer_with_counter
+    # def add_tag(self, *,
+    #             id: str,
+    #             tag: str,
+    #             tag_type: str = 'default',
+    #             resource_type: ResourceType = ResourceType.Table) -> str:
+    #     """
+    #     Add new tag
+    #     1. Create the node with type Tag if the node doesn't exist.
+    #     2. Create the relation between tag and table if the relation doesn't exist.
+    #
+    #     :param id:
+    #     :param tag:
+    #     :param tag_type:
+    #     :param resource_type:
+    #     :return: None
+    #     """
+    #     LOGGER.info('New tag {} for id {} with type {} and resource type {}'.format(tag, id, tag_type,
+    #                                                                                 resource_type.name))
+    #
+    #     validation_query = \
+    #         'MATCH (n:{resource_type} {{key: $key}}) return n'.format(resource_type=resource_type.name)
+    #
+    #     upsert_tag_query = textwrap.dedent("""
+    #     MERGE (u:Tag {key: $tag})
+    #     on CREATE SET u={tag_type: $tag_type, key: $tag}
+    #     on MATCH SET u={tag_type: $tag_type, key: $tag}
+    #     """)
+    #
+    #     upsert_tag_relation_query = textwrap.dedent("""
+    #     MATCH (n1:Tag {{key: $tag, tag_type: $tag_type}}), (n2:{resource_type} {{key: $key}})
+    #     MERGE (n1)-[r1:TAG]->(n2)-[r2:TAGGED_BY]->(n1)
+    #     RETURN n1.key, n2.key
+    #     """.format(resource_type=resource_type.name))
+    #
+    #     try:
+    #         tx = self._driver.session(database=self._database_name).begin_transaction()
+    #         tbl_result = tx.run(validation_query, {'key': id})
+    #         if not tbl_result.single():
+    #             raise NotFoundException('id {} does not exist'.format(id))
+    #
+    #         # upsert the node
+    #         tx.run(upsert_tag_query, {'tag': tag,
+    #                                   'tag_type': tag_type})
+    #         result = tx.run(upsert_tag_relation_query, {'tag': tag,
+    #                                                     'key': id,
+    #                                                     'tag_type': tag_type})
+    #         if not result.single():
+    #             raise RuntimeError('Failed to create relation between '
+    #                                'tag {tag} and resource {resource} of resource type: {resource_type}'
+    #                                .format(tag=tag,
+    #                                        resource=id,
+    #                                        resource_type=resource_type.name))
+    #         tx.commit()
+    #         return f"The tag {tag} for id {id} with type {tag_type} and resource_type {resource_type.name} is added successfully"
+    #
+    #     except Exception as e:
+    #         if not tx.closed():
+    #             tx.rollback()
+    #         # propagate the exception back to api
+    #         raise e
+
     @timer_with_counter
     def add_tag(self, *,
                 id: str,
                 tag: str,
                 tag_type: str = 'default',
-                resource_type: ResourceType = ResourceType.Table) -> None:
+                resource_type: ResourceType = ResourceType.Table) -> str:
         """
         Add new tag
         1. Create the node with type Tag if the node doesn't exist.
         2. Create the relation between tag and table if the relation doesn't exist.
 
-        :param id:
-        :param tag:
-        :param tag_type:
-        :param resource_type:
-        :return: None
+        :param id: The key of the resource to tag
+        :param tag: The tag to add
+        :param tag_type: The type of the tag (default: 'default')
+        :param resource_type: The type of the resource (default: ResourceType.Table)
+        :return: A success message string
         """
-        LOGGER.info('New tag {} for id {} with type {} and resource type {}'.format(tag, id, tag_type,
-                                                                                    resource_type.name))
 
-        validation_query = \
-            'MATCH (n:{resource_type} {{key: $key}}) return n'.format(resource_type=resource_type.name)
+        LOGGER.info(f'New tag {tag} for id {id} with type {tag_type} and resource type {resource_type.name}')
+
+        validation_query = f'MATCH (n:{resource_type.name} {{key: $key}}) return n'
 
         upsert_tag_query = textwrap.dedent("""
         MERGE (u:Tag {key: $tag})
-        on CREATE SET u={tag_type: $tag_type, key: $tag}
-        on MATCH SET u={tag_type: $tag_type, key: $tag}
+        ON CREATE SET u = {tag_type: $tag_type, key: $tag}
+        ON MATCH SET u = {tag_type: $tag_type, key: $tag}
         """)
 
-        upsert_tag_relation_query = textwrap.dedent("""
-        MATCH (n1:Tag {{key: $tag, tag_type: $tag_type}}), (n2:{resource_type} {{key: $key}})
+        upsert_tag_relation_query = textwrap.dedent(f"""
+        MATCH (n1:Tag {{key: $tag, tag_type: $tag_type}}), (n2:{resource_type.name} {{key: $key}})
         MERGE (n1)-[r1:TAG]->(n2)-[r2:TAGGED_BY]->(n1)
-        RETURN n1.key, n2.key
-        """.format(resource_type=resource_type.name))
+        RETURN n1.key AS tag_key, n2.key AS resource_key
+        """)
 
         try:
-            tx = self._driver.session(database=self._database_name).begin_transaction()
-            tbl_result = tx.run(validation_query, {'key': id})
-            if not tbl_result.single():
-                raise NotFoundException('id {} does not exist'.format(id))
+            # Validate that the resource exists
+            validation_result = self._execute_cypher_query(statement=validation_query, param_dict={'key': id})
+            if not validation_result:
+                raise NotFoundException(f'id {id} does not exist')
 
-            # upsert the node
-            tx.run(upsert_tag_query, {'tag': tag,
-                                      'tag_type': tag_type})
-            result = tx.run(upsert_tag_relation_query, {'tag': tag,
-                                                        'key': id,
-                                                        'tag_type': tag_type})
-            if not result.single():
-                raise RuntimeError('Failed to create relation between '
-                                   'tag {tag} and resource {resource} of resource type: {resource_type}'
-                                   .format(tag=tag,
-                                           resource=id,
-                                           resource_type=resource_type.name))
-            tx.commit()
+            # Upsert the tag node
+            self._execute_cypher_query(statement=upsert_tag_query, param_dict={'tag': tag, 'tag_type': tag_type})
+
+            # Create the relation between tag and resource
+            relation_result = self._execute_cypher_query(statement=upsert_tag_relation_query,
+                                                        param_dict= {'tag': tag, 'key': id, 'tag_type': tag_type})
+
+            if not relation_result:
+                raise RuntimeError(f'Failed to create relation between '
+                                   f'tag {tag} and resource {id} of resource type: {resource_type.name}')
+
+            return f"The tag {tag} for id {id} with type {tag_type} and resource_type {resource_type.name} is added successfully"
+
         except Exception as e:
-            if not tx.closed():
-                tx.rollback()
-            # propagate the exception back to api
+            LOGGER.error(f"Error adding tag {tag} to {resource_type.name} {id}: {e}")
             raise e
 
     @timer_with_counter
